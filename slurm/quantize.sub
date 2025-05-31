@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=4:00:00
 #SBATCH --mem=32G
-#SBATCH --output=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/logs/qwen2.5-32b-instruct/output_qwen_gptq.log
-#SBATCH --error=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/logs/qwen2.5-32b-instruct/error_qwen_gptq.log
+#SBATCH --output=logs/qwen2.5-32b-instruct/output_qwen_gptq.log
+#SBATCH --error=logs/qwen2.5-32b-instruct/error_qwen_gptq.log
 
 set -eEuo pipefail
 trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
@@ -42,8 +42,15 @@ mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 # ===== 构建容器（如必要）=====
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
-    echo "📦 开始构建容器镜像: $SIF_FILE"
-    apptainer build --force "$SIF_FILE" "$DEF_FILE"
+    echo "📦 开始构建容器镜像..."
+
+    TMP_SIF="/tmp/qwen-gptq-${SLURM_JOB_ID}.sif"
+    echo "📦 构建到临时路径: $TMP_SIF"
+    
+    apptainer build "$TMP_SIF" "$DEF_FILE"
+
+    mv "$TMP_SIF" "$SIF_FILE"
+    echo "✅ 容器构建完成并移动到: $SIF_FILE"
 else
     echo "✅ 容器镜像已是最新: $SIF_FILE"
 fi
