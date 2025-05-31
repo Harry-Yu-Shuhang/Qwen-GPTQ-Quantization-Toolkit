@@ -20,15 +20,15 @@ cd "$SLURM_SUBMIT_DIR"
 # ===== 模块加载（AISurrey）=====
 if [ -f /etc/profile.d/modules.sh ]; then
     source /etc/profile.d/modules.sh
-    module load apptainer || echo "⚠️ Apptainer 模块加载失败，确保已安装"
+    module load apptainer || echo "⚠️ Apptainer 模块加载失败，跳过"
 fi
 
-# ===== 设置缓存路径（避免 /tmp 空间不足）=====
+# ===== 设置 Apptainer 构建缓存路径 =====
 export APPTAINER_TMPDIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_tmp"
 export APPTAINER_CACHEDIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_cache"
 mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 
-# ===== 项目与容器定义 =====
+# ===== 项目与容器路径 =====
 WORKDIR="$SLURM_SUBMIT_DIR"
 DEF_FILE="$WORKDIR/build_GPTQModel/apptainer.def"
 SIF_FILE="$WORKDIR/build_GPTQModel/qwen-gptq.sif"
@@ -40,23 +40,28 @@ OUTPUT_DIR="$WORKDIR/quantized_models/qwen-32b-gptq-v2"
 CACHE_DIR="$WORKDIR/original_models"
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
-# ===== 构建容器（如必要）=====
+# ===== 构建容器镜像（避免直接在 WekaFS 构建）=====
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
-    echo "📦 开始构建容器镜像..."
+    echo "📦 构建容器镜像中..."
 
-    TMP_SIF="/tmp/qwen-gptq-${SLURM_JOB_ID}.sif"
-    echo "📦 构建到临时路径: $TMP_SIF"
-    
-    apptainer build "$TMP_SIF" "$DEF_FILE"
+    TMP_SIF="/tmp/qwen-gptq-${SLURM_JOB_ID:-manual}.$(date +%s).sif"
+    echo "📦 使用临时路径构建: $TMP_SIF"
 
-    mv "$TMP_SIF" "$SIF_FILE"
-    echo "✅ 容器构建完成并移动到: $SIF_FILE"
+    if apptainer build "$TMP_SIF" "$DEF_FILE"; then
+        echo "✅ 容器构建成功，移动到: $SIF_FILE"
+        mv "$TMP_SIF" "$SIF_FILE"
+    else
+        echo "❌ 容器构建失败，建议检查:"
+        echo "1. /tmp 是否满了"
+        echo "2. 是否存在文件系统限制 (如 xattr 或权限)"
+        exit 1
+    fi
 else
-    echo "✅ 容器镜像已是最新: $SIF_FILE"
+    echo "✅ 容器镜像已存在且为最新版本"
 fi
 
 # ===== 容器健康检查 =====
-echo "🩺 开始容器健康检查..."
+echo "🩺 正在检查容器内 PyTorch 和 CUDA..."
 apptainer exec --nv "$SIF_FILE" python -c \
 "import torch; print(f'PyTorch 版本: {torch.__version__}, CUDA 可用: {torch.cuda.is_available()}')"
 
@@ -72,6 +77,6 @@ apptainer exec --nv \
         --config "$CONFIG" \
         --cache_dir /hf_cache
 
-# ===== 完成标记 =====
+# ===== 成功标记 =====
 echo "✅ 作业完成: $(date)"
 touch "$OUTPUT_DIR/COMPLETED"
