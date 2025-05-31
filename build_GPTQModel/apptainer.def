@@ -1,0 +1,25 @@
+Bootstrap: docker
+From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+%labels
+    Author YourName
+    Description Container for Qwen GPTQ Quantization
+
+%files
+    # 本地文件复制
+    build_GPTQModel/install.sh /opt/install.sh
+    scripts/quantize.py /opt/quantize.py
+    
+    # Git 子模块
+    build_GPTQModel/GPTQModel /opt/GPTQModel
+
+%environment
+    # ... 同前述环境变量 ...
+
+%post
+    # ... 同前述安装步骤 ...
+
+%runscript
+    . /opt/conda/etc/profile.d/conda.sh
+    conda activate qwen-gptq
+    exec "$@"

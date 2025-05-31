@@ -1,0 +1,9 @@
+# 忽略大文件和临时文件
+models/
+*.sif
+*.simg
+*.log
+*.err
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,3 @@
+[submodule "build_GPTQModel/GPTQModel"]
+	path = build_GPTQModel/GPTQModel
+	url = https://github.com/ModelCloud/GPTQModel.git
