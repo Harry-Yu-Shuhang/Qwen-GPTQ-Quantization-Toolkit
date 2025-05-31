@@ -11,59 +11,30 @@
 #SBATCH --error=logs/error_qwen_gptq.log
 
 set -eEuo pipefail
-trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
+trap 'echo "❌ 任务失败: 行号 $LINENO, 退出码 $?"' ERR
 
 echo "🔍 作业开始: $(date)"
 echo "📂 当前目录: $(pwd)"
-cd "$SLURM_SUBMIT_DIR" || { echo "❌ 无法进入提交目录"; exit 1; }
+cd "$SLURM_SUBMIT_DIR"
 
-# ===== Apptainer 环境加载 =====
-if [ -f /etc/profile.d/modules.sh ]; then
-    source /etc/profile.d/modules.sh || true
-    module load apptainer || echo "⚠️ Apptainer 模块加载失败，确保系统已安装"
-fi
-
-# ===== 设置 Apptainer 缓存目录 =====
-export APPTAINER_TMPDIR="$PWD/apptainer_tmp"
-export APPTAINER_CACHEDIR="$PWD/apptainer_cache"
-mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
-echo "📦 缓存路径: $APPTAINER_TMPDIR, $APPTAINER_CACHEDIR"
-
-# ===== 容器定义与镜像路径 =====
 DEF_FILE="build_GPTQModel/apptainer.def"
 SIF_FILE="build_GPTQModel/qwen-gptq.sif"
 
-# ===== 模型路径与输出目录（可按需修改）=====
-MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
-OUTPUT_DIR="$PWD/quantized_models/qwen2.5-32b-gptq"
-CONFIG_FILE="$PWD/configs/qwen_32b_gptq.yaml"
-CACHE_DIR="$PWD/original_models"
-mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
-
-# ===== 构建容器（如必要）=====
+# 构建镜像（如有必要）
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
-    echo "📦 正在构建容器镜像: $SIF_FILE"
-    rm -f "$SIF_FILE"
+    echo "📦 构建 Apptainer 镜像..."
     apptainer build "$SIF_FILE" "$DEF_FILE"
 else
-    echo "✅ 容器镜像已是最新: $SIF_FILE"
+    echo "✅ 镜像已是最新: $SIF_FILE"
 fi
 
-# ===== 健康检查 =====
-echo "🩺 容器健康检查..."
-apptainer exec --nv "$SIF_FILE" python -c "import torch; print(f'PyTorch版本: {torch.__version__}, CUDA可用: {torch.cuda.is_available()}')"
-
-# ===== 启动量化任务 =====
-echo "🚀 执行量化任务..."
-apptainer exec --nv \
-    --bind "$PWD:/opt/project" \
-    --bind "$CACHE_DIR:/hf_cache" \
-    "$SIF_FILE" \
-    python /opt/project/quantize.py \
-        --model_id "$MODEL_ID" \
-        --output_dir "$OUTPUT_DIR" \
-        --config "$CONFIG_FILE" \
-        --cache_dir /hf_cache
+# 启动量化任务
+echo "🚀 启动 GPTQ 量化..."
+apptainer exec --nv "$SIF_FILE" \
+    python /opt/app/quantize.py \
+        --model_id Qwen/Qwen2.5-32B-Instruct \
+        --output_dir quantized_models/qwen-32b-gptq \
+        --config /opt/app/configs/qwen_32b_gptq.yaml \
+        --cache_dir /tmp/hf_cache
 
 echo "✅ 任务完成: $(date)"
-touch "$OUTPUT_DIR/COMPLETED"

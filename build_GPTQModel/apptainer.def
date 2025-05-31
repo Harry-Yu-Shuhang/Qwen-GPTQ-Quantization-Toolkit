@@ -3,33 +3,34 @@ From: nvidia/cuda:11.8.0-devel-ubuntu22.04
 
 %labels
     Author ShuhangYu
-    Description Apptainer image for Qwen GPTQ Compression (AutoGPTQ + PyTorch 2.3)
+    Description Apptainer for Qwen GPTQ Compression using GPTQModel
 
 %files
     install.sh /opt/install.sh
     ../GPTQModel /opt/GPTQModel
-    ../quantize.py /opt/project/quantize.py
-    ../configs /opt/project/configs
+    ../quantize.py /opt/app/quantize.py
+    ../configs /opt/app/configs
 
 %environment
     export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     export TRANSFORMERS_CACHE=/tmp/hf_cache
     export HF_HOME=/tmp/hf_cache
-    export PYTHONPATH=/opt/project:/opt/GPTQModel
+    export PYTHONPATH=/opt/app:/opt/GPTQModel
+    export PATH=/opt/conda/bin:$PATH
 
 %post
     set -eEuo pipefail
     trap 'echo "❌ 安装失败: 行号 $LINENO，命令: $BASH_COMMAND" >&2; exit 1' ERR
 
-    echo "🔧 初始化 Conda 环境..."
-    apt update && apt install -y wget git bzip2
-    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-    bash miniconda.sh -b -p /opt/conda
-    export PATH=/opt/conda/bin:$PATH
-    conda init bash
+    echo "📦 安装基础依赖..."
+    apt update && apt install -y wget git bzip2 curl
 
-    echo "📦 安装依赖包..."
+    echo "📦 安装 Conda..."
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    bash miniconda.sh -b -p /opt/conda && rm miniconda.sh
+
+    echo "📦 安装 Python 包..."
     bash /opt/install.sh
 
 %runscript
-    exec python /opt/project/quantize.py "$@"
+    exec python /opt/app/quantize.py "$@"
