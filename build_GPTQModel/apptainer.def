@@ -19,7 +19,6 @@ From: nvidia/cuda:11.8.0-devel-ubuntu22.04
     export PATH=/opt/conda/bin:$PATH
 
 %post
-
     echo "📦 安装基础依赖..."
     apt update && apt install -y wget git bzip2 curl
 

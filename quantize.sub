@@ -39,7 +39,7 @@ fi
 # 启动量化任务
 echo "🚀 启动 GPTQ 量化..."
 apptainer exec --nv "$SIF_FILE" \
-    python /opt/quantize.py \
+    python /opt/app/quantize.py \
         --model_id Qwen/Qwen2.5-32B-Instruct \
         --output_dir "/opt/${OUTPUT_DIR}" \
         --config /opt/configs/qwen_32b_gptq.yaml \
