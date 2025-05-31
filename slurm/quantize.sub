@@ -14,35 +14,36 @@
 # 设置 Hugging Face 模型 ID（公开或私有模型）
 MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
 
-# 设置输出目录（使用您有权限的路径）
+# 设置输出目录
 OUTPUT_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/quantized_models/qwen-32b-gptq-v2"
 
-# 设置配置文件路径（使用绝对路径）
+# 设置配置文件路径
 CONFIG="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/configs/qwen_32b_gptq.yaml"
 
-# 设置 Hugging Face 缓存目录（使用您有权限的路径）
+# 设置 Hugging Face 缓存目录
 CACHE_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/original_models"
 
-# 设置项目根目录（使用绝对路径）
+# 设置项目根目录
 PROJECT_ROOT="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit"
 
 # 设置 Hugging Face 访问令牌（仅私有模型需要）
 # export HF_TOKEN="your_huggingface_token"
 
-# ===== 系统设置 =====
+# ===== 初始化设置 =====
+# 首先创建日志目录 - 必须在任何输出之前
+MAIN_LOG_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs"
+mkdir -p "$MAIN_LOG_DIR"
+
+# 设置错误处理
 set -eEuo pipefail
 trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
 
 # 获取作业ID
 JOB_ID=${SLURM_JOB_ID:-$(date +%s)}
 echo "🆔 作业ID: $JOB_ID"
+echo "📁 主日志目录: $MAIN_LOG_DIR"
 
-# 创建日志目录（使用您有权限的路径）
-LOG_DIR="/vol/research/ly0008/ysh/logs"
-mkdir -p "$LOG_DIR"
-echo "📁 日志目录: $LOG_DIR"
-
-# 容器文件路径（使用绝对路径）
+# 容器文件路径
 DEF_FILE="$PROJECT_ROOT/build_GPTQModel/apptainer.def"
 SIF_FILE="$PROJECT_ROOT/build_GPTQModel/qwen-gptq.sif"
 echo "🔧 容器定义: $DEF_FILE"
@@ -53,7 +54,7 @@ mkdir -p "$CACHE_DIR"
 echo "📦 缓存目录: $CACHE_DIR (大小: $(du -sh $CACHE_DIR 2>/dev/null | cut -f1 || echo '新目录'))"
 
 # ===== 容器构建 =====
-BUILD_LOG="$LOG_DIR/container_build_$JOB_ID.log"
+BUILD_LOG="$MAIN_LOG_DIR/container_build_$JOB_ID.log"
 echo -e "\n🚧 检查容器镜像..."
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
     echo "🛠️ 需要构建容器..."
@@ -94,7 +95,7 @@ fi
 
 # ===== 容器健康检查 =====
 echo -e "\n🔍 运行容器健康检查..."
-CHECK_LOG="$LOG_DIR/container_check_$JOB_ID.log"
+CHECK_LOG="$MAIN_LOG_DIR/container_check_$JOB_ID.log"
 if ! apptainer exec --nv "$SIF_FILE" bash -c \
     "python -c \"import torch; print(f'PyTorch版本: {torch.__version__}, CUDA可用: {torch.cuda.is_available()}')\"" \
     2>&1 | tee "$CHECK_LOG"; then
@@ -119,7 +120,7 @@ fi
 
 # ===== 量化任务 =====
 echo -e "\n🚀 启动量化任务..."
-QUANT_LOG="$LOG_DIR/quant_task_$JOB_ID.log"
+QUANT_LOG="$MAIN_LOG_DIR/quant_task_$JOB_ID.log"
 echo "===== 量化参数 =====" | tee "$QUANT_LOG"
 echo "模型ID: $MODEL_ID" | tee -a "$QUANT_LOG"
 echo "输出目录: $OUTPUT_DIR" | tee -a "$QUANT_LOG"
