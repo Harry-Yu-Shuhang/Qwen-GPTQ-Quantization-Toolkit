@@ -1,5 +1,6 @@
 # 忽略大文件和临时文件
-models/
+/models/
+/quantized_models/
 *.sif
 *.simg
 *.log
