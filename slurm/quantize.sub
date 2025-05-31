@@ -1,86 +1,194 @@
-import argparse
-import os
-import yaml
-import time
-from gptqmodel import GPTQModel, QuantizeConfig
-from datasets import load_dataset
-import torch
+#!/bin/bash
+#SBATCH --partition=debug
+#SBATCH --job-name=qwen_gptq
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --time=4:00:00
+#SBATCH --mem=32G
+#SBATCH --output=logs/quant_%j.log
+#SBATCH --error=logs/quant_%j.err
 
-def load_config(config_path):
-    """加载YAML配置文件"""
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+# ===== 用户配置区 =====
+# 设置 Hugging Face 模型 ID（公开或私有模型）
+MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
 
-def main():
-    # 解析命令行参数
-    parser = argparse.ArgumentParser(description='Qwen GPTQ 量化工具')
-    parser.add_argument('--model_id', type=str, required=True,
-                        help='Hugging Face 模型 ID (如 Qwen/Qwen2.5-32B-Instruct)')
-    parser.add_argument('--output_dir', type=str, required=True,
-                        help='量化模型输出目录')
-    parser.add_argument('--config', type=str, default='configs/qwen_32b_gptq.yaml',
-                        help='量化配置文件路径')
-    parser.add_argument('--cache_dir', type=str, default='/tmp/hf_cache',
-                        help='Hugging Face 缓存目录')
-    args = parser.parse_args()
+# 设置输出目录
+OUTPUT_DIR="./quantized_models/qwen-32b-gptq-v2"
 
-    # 创建输出目录
-    os.makedirs(args.output_dir, exist_ok=True)
-    
-    # 加载配置文件
-    print(f"⚙️ 加载配置文件: {args.config}")
-    config = load_config(args.config)
-    quant_config = QuantizeConfig(**config['quantization'])
-    
-    # 加载校准数据集
-    print(f"📊 加载校准数据集: {config['calibration_dataset']['name']}")
-    dataset_cfg = config['calibration_dataset']
-    calibration_data = load_dataset(
-        dataset_cfg['name'],
-        dataset_cfg.get('config'),
-        split=dataset_cfg['split'],
-        cache_dir=args.cache_dir
-    )[dataset_cfg['text_column']][:dataset_cfg['samples']]
-    
-    # 加载模型
-    print(f"🚀 从 Hugging Face 加载模型: {args.model_id}")
-    print(f"💾 使用缓存目录: {args.cache_dir}")
-    start_time = time.time()
-    
-    model = GPTQModel.load(
-        args.model_id,
-        quant_config,
-        torch_dtype=torch.bfloat16,
-        cache_dir=args.cache_dir
-    )
-    
-    load_time = time.time() - start_time
-    print(f"✅ 模型加载完成! 耗时: {load_time:.2f}秒")
-    
-    # 量化配置
-    quant_params = {
-        'calibration_data': calibration_data,
-        'batch_size': config['batch_size'],
-        'auto_gc': config['auto_gc'],
-        'buffered_fwd': config['buffered_fwd']
-    }
-    
-    # 执行量化
-    print(f"🔧 开始量化 (参数: {quant_params})")
-    start_quant_time = time.time()
-    model.quantize(**quant_params)
-    quant_time = time.time() - start_quant_time
-    print(f"🎉 量化完成! 总耗时: {quant_time:.2f}秒")
-    
-    # 保存量化模型
-    print(f"💾 保存量化模型到: {args.output_dir}")
-    model.save(args.output_dir)
-    
-    # 创建完成标记
-    with open(os.path.join(args.output_dir, "COMPLETED"), "w") as f:
-        f.write(f"success|model:{args.model_id}|time:{time.time()}")
-    
-    print("✅ 所有操作完成!")
+# 设置配置文件路径
+CONFIG="configs/qwen_32b_gptq.yaml"
 
-if __name__ == "__main__":
-    main()
+# 设置 Hugging Face 缓存目录（推荐使用集群持久存储）
+CACHE_DIR="/vol/research/ly0008/hf_cache"
+
+# 设置 Hugging Face 访问令牌（仅私有模型需要）
+# export HF_TOKEN="your_huggingface_token"
+
+# ===== 系统设置 =====
+set -eEuo pipefail
+trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
+
+# 获取作业ID
+JOB_ID=${SLURM_JOB_ID:-$(date +%s)}
+echo "🆔 作业ID: $JOB_ID"
+
+# 创建日志目录
+LOG_DIR="logs"
+mkdir -p "$LOG_DIR"
+echo "📁 日志目录: $LOG_DIR"
+
+# 容器文件路径
+DEF_FILE="build_GPTQModel/apptainer.def"
+SIF_FILE="build_GPTQModel/qwen-gptq.sif"
+echo "🔧 容器定义: $DEF_FILE"
+echo "📦 容器镜像: $SIF_FILE"
+
+# 创建缓存目录
+mkdir -p "$CACHE_DIR"
+echo "📦 缓存目录: $CACHE_DIR (大小: $(du -sh $CACHE_DIR | cut -f1))"
+
+# ===== 容器构建 =====
+BUILD_LOG="$LOG_DIR/container_build_$JOB_ID.log"
+echo -e "\n🚧 检查容器镜像..."
+if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
+    echo "🛠️ 需要构建容器..."
+    
+    # 清理旧构建缓存
+    echo "🧹 清理临时文件..."
+    find "/tmp" -name "apptainer-build-temp-*" -user $(whoami) -mtime +1 -exec rm -rf {} \; 2>/dev/null || true
+    
+    # 尝试构建容器（最多3次）
+    for ATTEMPT in {1..3}; do
+        echo "🔨 构建尝试 #$ATTEMPT..."
+        if apptainer build "$SIF_FILE" "$DEF_FILE" 2>&1 | tee "$BUILD_LOG"; then
+            if [ -f "$SIF_FILE" ]; then
+                echo "✅ 容器构建成功!"
+                break
+            else
+                echo "❌ 容器文件未生成，可能内部错误"
+            fi
+        else
+            BUILD_EXIT_CODE=${PIPESTATUS[0]}
+            echo "❌ 构建失败 (退出码 $BUILD_EXIT_CODE)，等待重试..."
+        fi
+        
+        if [ $ATTEMPT -lt 3 ]; then
+            sleep $((ATTEMPT * 30))
+        else
+            echo "🔥 容器构建失败，请检查日志: $BUILD_LOG"
+            echo "可能的解决方案:"
+            echo "1. 检查磁盘空间: df -h"
+            echo "2. 确保有足够权限"
+            echo "3. 尝试手动构建: apptainer build $SIF_FILE $DEF_FILE"
+            exit 1
+        fi
+    done
+else
+    echo "✅ 容器镜像已存在且是最新的"
+fi
+
+# ===== 容器健康检查 =====
+echo -e "\n🔍 运行容器健康检查..."
+CHECK_LOG="$LOG_DIR/container_check_$JOB_ID.log"
+if ! apptainer exec --nv "$SIF_FILE" bash -c \
+    "python -c \"import torch; print(f'PyTorch版本: {torch.__version__}, CUDA可用: {torch.cuda.is_available()}')\"" \
+    2>&1 | tee "$CHECK_LOG"; then
+    
+    echo "🔥 容器健康检查失败"
+    echo "可能原因:"
+    echo "1. CUDA驱动不兼容"
+    echo "2. PyTorch安装问题"
+    echo "3. 容器内部错误"
+    exit 1
+fi
+
+# 验证检查结果
+if grep -q "CUDA可用: True" "$CHECK_LOG"; then
+    echo "✅ 容器健康检查通过"
+else
+    echo "🔥 CUDA不可用，检查日志: $CHECK_LOG"
+    echo "最后一节日志:"
+    tail -n 20 "$CHECK_LOG"
+    exit 1
+fi
+
+# ===== 量化任务 =====
+echo -e "\n🚀 启动量化任务..."
+QUANT_LOG="$LOG_DIR/quant_task_$JOB_ID.log"
+echo "===== 量化参数 =====" | tee "$QUANT_LOG"
+echo "模型ID: $MODEL_ID" | tee -a "$QUANT_LOG"
+echo "输出目录: $OUTPUT_DIR" | tee -a "$QUANT_LOG"
+echo "配置文件: $CONFIG" | tee -a "$QUANT_LOG"
+echo "缓存目录: $CACHE_DIR" | tee -a "$QUANT_LOG"
+echo "开始时间: $(date)" | tee -a "$QUANT_LOG"
+echo "====================" | tee -a "$QUANT_LOG"
+
+# 准备环境变量
+ENV_VARS=""
+if [ -n "${HF_TOKEN:-}" ]; then
+    echo "🔑 检测到 HF_TOKEN，将用于私有模型访问" | tee -a "$QUANT_LOG"
+    ENV_VARS="--env HF_TOKEN=$HF_TOKEN"
+fi
+
+# 运行量化命令
+echo "⏬ 开始下载和量化模型..." | tee -a "$QUANT_LOG"
+if ! apptainer exec --nv \
+    $ENV_VARS \
+    --bind "$CACHE_DIR:/hf_cache" \
+    "$SIF_FILE" \
+    python /opt/quantize.py \
+        --model_id "$MODEL_ID" \
+        --output_dir "$OUTPUT_DIR" \
+        --config "$CONFIG" \
+        --cache_dir /hf_cache \
+    2>&1 | tee -a "$QUANT_LOG"; then
+    
+    QUANT_EXIT_CODE=${PIPESTATUS[0]}
+    echo "🔥 量化任务失败 (退出码 $QUANT_EXIT_CODE)" | tee -a "$QUANT_LOG"
+    echo "查看日志: $QUANT_LOG" | tee -a "$QUANT_LOG"
+    echo "最后一节日志:" | tee -a "$QUANT_LOG"
+    tail -n 30 "$QUANT_LOG" | tee -a "$QUANT_LOG"
+    
+    # 提供诊断建议
+    echo "可能原因及解决方案:" | tee -a "$QUANT_LOG"
+    echo "1. 网络问题: 检查集群是否能访问 huggingface.co" | tee -a "$QUANT_LOG"
+    echo "2. 模型ID错误: 确认 '$MODEL_ID' 是有效的 Hugging Face 模型" | tee -a "$QUANT_LOG"
+    echo "3. 显存不足: 尝试减少校准数据量或使用更大 GPU" | tee -a "$QUANT_LOG"
+    echo "4. 缓存问题: 尝试删除缓存目录 $CACHE_DIR 并重试" | tee -a "$QUANT_LOG"
+    
+    exit 1
+fi
+
+# 检查量化结果
+echo -e "\n🔎 验证量化结果..." | tee -a "$QUANT_LOG"
+if [ -f "$OUTPUT_DIR/COMPLETED" ]; then
+    echo "✅ 量化成功完成!" | tee -a "$QUANT_LOG"
+    echo "模型大小: $(du -sh $OUTPUT_DIR | cut -f1)" | tee -a "$QUANT_LOG"
+    echo "输出文件:" | tee -a "$QUANT_LOG"
+    ls -lh "$OUTPUT_DIR" | tee -a "$QUANT_LOG"
+else
+    echo "❌ 量化未完成，缺少COMPLETED标记" | tee -a "$QUANT_LOG"
+    echo "可能原因:" | tee -a "$QUANT_LOG"
+    echo "1. 脚本提前退出" | tee -a "$QUANT_LOG"
+    echo "2. 存储空间不足" | tee -a "$QUANT_LOG"
+    echo "3. 权限问题" | tee -a "$QUANT_LOG"
+    exit 1
+fi
+
+echo "结束时间: $(date)" | tee -a "$QUANT_LOG"
+echo "====================" | tee -a "$QUANT_LOG"
+
+# ===== 最终状态 =====
+echo -e "\n🏁 任务完成! 详细日志:"
+echo "  - 容器构建: $BUILD_LOG"
+echo "  - 健康检查: $CHECK_LOG"
+echo "  - 量化过程: $QUANT_LOG"
+echo "  - 输出模型: $OUTPUT_DIR"
+
+# 添加成功标记
+touch "$OUTPUT_DIR/JOB_$JOB_ID_SUCCESS"
+echo "✅ 量化任务 $JOB_ID 成功完成于 $(date)" > "$OUTPUT_DIR/JOB_$JOB_ID_SUCCESS"
+
+exit 0
