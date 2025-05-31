@@ -1,19 +1,23 @@
-# Qwen 32B GPTQModel 量化配置
 quantization:
   bits: 4
   group_size: 128
   damp_percent: 0.01
+  damp_auto_increment: 0.01     # 建议加上，与 class 定义一致
   desc_act: false
+  static_groups: false
   sym: true
   true_sequential: true
-  # tokenizer: Qwen/Qwen2.5-32B-Instruct
-  block_name_to_quantize:
-    - q_proj
-    - k_proj
-    - v_proj
-    - o_proj
-    - gate_proj
-    - up_proj
-    - down_proj
-
-batch_size: 4
+  lm_head: false
+  quant_method: GPTQ            # 如果使用枚举，需要解析
+  format: GPTQ                  # 同上
+  mse: 0.0
+  parallel_packing: true
+  meta: null
+  device: null
+  pack_dtype: int32             # 这里建议你转成 torch.int32，否则会报错
+  adapter: null
+  rotation: null
+  is_marlin_format: false
+  v2: true
+  v2_alpha: 0.25
+  v2_memory_device: auto
