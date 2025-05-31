@@ -1,23 +1,19 @@
-# Qwen 32B GPTQ 量化配置
+# Qwen 32B GPTQModel 量化配置
 quantization:
   bits: 4
   group_size: 128
-  v2: true
-  # calibration_dataset_min_length: 10
-  dynamic:
-    ".*attention.*": 
-      bits: 4
-    ".*mlp.*": 
-      bits: 4
-    "-:.*lm_head.*": {}
-
-calibration_dataset:
-  name: "wikitext"
-  config: "wikitext-2-v1"
-  split: "train"
-  text_column: "text"
-  samples: 1024
+  damp_percent: 0.01
+  desc_act: false
+  sym: true
+  true_sequential: true
+  tokenizer: Qwen/Qwen2.5-32B-Instruct
+  block_name_to_quantize:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
 
 batch_size: 4
-auto_gc: false
-buffered_fwd: true
