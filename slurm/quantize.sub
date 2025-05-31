@@ -7,202 +7,64 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=4:00:00
 #SBATCH --mem=32G
-#SBATCH --output=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/logs/quant_%j.log
-#SBATCH --error=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/logs/quant_%j.err
+#SBATCH --output=logs/qwen2.5-32b-instruct/output_qwen_gptq.log
+#SBATCH --error=logs/qwen2.5-32b-instruct/error_qwen_gptq.log
 
-# ==== 使用持久空间作为构建缓存目录 ====
-export APPTAINER_TMPDIR=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_tmp
-export APPTAINER_CACHEDIR=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_cache
-mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
-
-echo "⚠️ Apptainer 构建缓存目录已重定向:"
-echo "  TMPDIR:  $APPTAINER_TMPDIR"
-echo "  CACHEDIR:$APPTAINER_CACHEDIR"
-
-# ===== 用户配置区 =====
-# 设置 Hugging Face 模型 ID（公开或私有模型）
-MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
-
-# 设置输出目录
-OUTPUT_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/quantized_models/qwen-32b-gptq-v2"
-
-# 设置配置文件路径
-CONFIG="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/configs/qwen_32b_gptq.yaml"
-
-# 设置 Hugging Face 缓存目录
-CACHE_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/original_models"
-
-# 设置项目根目录
-PROJECT_ROOT="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit"
-
-# 设置 Hugging Face 访问令牌（仅私有模型需要）
-# export HF_TOKEN="your_huggingface_token"
-
-# ===== 初始化设置 =====
-# 首先创建日志目录 - 必须在任何输出之前
-MAIN_LOG_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs"
-mkdir -p "$MAIN_LOG_DIR"
-
-# 设置错误处理
 set -eEuo pipefail
 trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
 
-# 获取作业ID
-JOB_ID=${SLURM_JOB_ID:-$(date +%s)}
-echo "🆔 作业ID: $JOB_ID"
-echo "📁 主日志目录: $MAIN_LOG_DIR"
+echo "🔍 作业开始: $(date)"
+echo "📂 当前目录: $(pwd)"
+cd "$SLURM_SUBMIT_DIR"
 
-# 容器文件路径
-DEF_FILE="$PROJECT_ROOT/build_GPTQModel/apptainer.def"
-SIF_FILE="$PROJECT_ROOT/build_GPTQModel/qwen-gptq.sif"
-echo "🔧 容器定义: $DEF_FILE"
-echo "📦 容器镜像: $SIF_FILE"
+# ===== 模块加载（AISurrey）=====
+if [ -f /etc/profile.d/modules.sh ]; then
+    source /etc/profile.d/modules.sh
+    module load apptainer || echo "⚠️ Apptainer 模块加载失败，确保已安装"
+fi
 
-# 创建缓存目录
-mkdir -p "$CACHE_DIR"
-echo "📦 缓存目录: $CACHE_DIR (大小: $(du -sh $CACHE_DIR 2>/dev/null | cut -f1 || echo '新目录'))"
+# ===== 设置缓存路径（避免 /tmp 空间不足）=====
+export APPTAINER_TMPDIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_tmp"
+export APPTAINER_CACHEDIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_cache"
+mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 
-# ===== 容器构建 =====
-BUILD_LOG="$MAIN_LOG_DIR/container_build_$JOB_ID.log"
-echo -e "\n🚧 检查容器镜像..."
+# ===== 项目与容器定义 =====
+WORKDIR="$SLURM_SUBMIT_DIR"
+DEF_FILE="$WORKDIR/build_GPTQModel/apptainer.def"
+SIF_FILE="$WORKDIR/build_GPTQModel/qwen-gptq.sif"
+
+# ===== 模型路径与配置 =====
+MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
+CONFIG="$WORKDIR/configs/qwen_32b_gptq.yaml"
+OUTPUT_DIR="$WORKDIR/quantized_models/qwen-32b-gptq-v2"
+CACHE_DIR="$WORKDIR/original_models"
+mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
+
+# ===== 构建容器（如必要）=====
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
-    echo "🛠️ 需要构建容器..."
-    
-    # 清理旧构建缓存
-    echo "🧹 清理临时文件..."
-    find "/tmp" -name "apptainer-build-temp-*" -user $(whoami) -mtime +1 -exec rm -rf {} \; 2>/dev/null || true
-    
-    # 尝试构建容器（最多3次）
-    for ATTEMPT in {1..3}; do
-        echo "🔨 构建尝试 #$ATTEMPT..."
-        if apptainer build "$SIF_FILE" "$DEF_FILE" 2>&1 | tee "$BUILD_LOG"; then
-            if [ -f "$SIF_FILE" ]; then
-                echo "✅ 容器构建成功!"
-                break
-            else
-                echo "❌ 容器文件未生成，可能内部错误"
-            fi
-        else
-            BUILD_EXIT_CODE=${PIPESTATUS[0]}
-            echo "❌ 构建失败 (退出码 $BUILD_EXIT_CODE)，等待重试..."
-        fi
-        
-        if [ $ATTEMPT -lt 3 ]; then
-            sleep $((ATTEMPT * 30))
-        else
-            echo "🔥 容器构建失败，请检查日志: $BUILD_LOG"
-            echo "可能的解决方案:"
-            echo "1. 检查磁盘空间: df -h"
-            echo "2. 确保有足够权限"
-            echo "3. 尝试手动构建: apptainer build $SIF_FILE $DEF_FILE"
-            exit 1
-        fi
-    done
+    echo "📦 开始构建容器镜像: $SIF_FILE"
+    apptainer build --force "$SIF_FILE" "$DEF_FILE"
 else
-    echo "✅ 容器镜像已存在且是最新的"
+    echo "✅ 容器镜像已是最新: $SIF_FILE"
 fi
 
 # ===== 容器健康检查 =====
-echo -e "\n🔍 运行容器健康检查..."
-CHECK_LOG="$MAIN_LOG_DIR/container_check_$JOB_ID.log"
-if ! apptainer exec --nv "$SIF_FILE" bash -c \
-    "python -c \"import torch; print(f'PyTorch版本: {torch.__version__}, CUDA可用: {torch.cuda.is_available()}')\"" \
-    2>&1 | tee "$CHECK_LOG"; then
-    
-    echo "🔥 容器健康检查失败"
-    echo "可能原因:"
-    echo "1. CUDA驱动不兼容"
-    echo "2. PyTorch安装问题"
-    echo "3. 容器内部错误"
-    exit 1
-fi
+echo "🩺 开始容器健康检查..."
+apptainer exec --nv "$SIF_FILE" python -c \
+"import torch; print(f'PyTorch 版本: {torch.__version__}, CUDA 可用: {torch.cuda.is_available()}')"
 
-# 验证检查结果
-if grep -q "CUDA可用: True" "$CHECK_LOG"; then
-    echo "✅ 容器健康检查通过"
-else
-    echo "🔥 CUDA不可用，检查日志: $CHECK_LOG"
-    echo "最后一节日志:"
-    tail -n 20 "$CHECK_LOG"
-    exit 1
-fi
-
-# ===== 量化任务 =====
-echo -e "\n🚀 启动量化任务..."
-QUANT_LOG="$MAIN_LOG_DIR/quant_task_$JOB_ID.log"
-echo "===== 量化参数 =====" | tee "$QUANT_LOG"
-echo "模型ID: $MODEL_ID" | tee -a "$QUANT_LOG"
-echo "输出目录: $OUTPUT_DIR" | tee -a "$QUANT_LOG"
-echo "配置文件: $CONFIG" | tee -a "$QUANT_LOG"
-echo "缓存目录: $CACHE_DIR" | tee -a "$QUANT_LOG"
-echo "开始时间: $(date)" | tee -a "$QUANT_LOG"
-echo "====================" | tee -a "$QUANT_LOG"
-
-# 准备环境变量
-ENV_VARS=""
-if [ -n "${HF_TOKEN:-}" ]; then
-    echo "🔑 检测到 HF_TOKEN，将用于私有模型访问" | tee -a "$QUANT_LOG"
-    ENV_VARS="--env HF_TOKEN=$HF_TOKEN"
-fi
-
-# 运行量化命令
-echo "⏬ 开始下载和量化模型..." | tee -a "$QUANT_LOG"
-if ! apptainer exec --nv \
-    $ENV_VARS \
+# ===== 启动量化任务 =====
+echo "🚀 启动 GPTQ 量化任务..."
+apptainer exec --nv \
+    --bind "$WORKDIR:/opt/project" \
     --bind "$CACHE_DIR:/hf_cache" \
-    --bind "$PROJECT_ROOT:/opt/project" \
     "$SIF_FILE" \
     python /opt/quantize.py \
         --model_id "$MODEL_ID" \
         --output_dir "$OUTPUT_DIR" \
         --config "$CONFIG" \
-        --cache_dir /hf_cache \
-    2>&1 | tee -a "$QUANT_LOG"; then
-    
-    QUANT_EXIT_CODE=${PIPESTATUS[0]}
-    echo "🔥 量化任务失败 (退出码 $QUANT_EXIT_CODE)" | tee -a "$QUANT_LOG"
-    echo "查看日志: $QUANT_LOG" | tee -a "$QUANT_LOG"
-    echo "最后一节日志:" | tee -a "$QUANT_LOG"
-    tail -n 30 "$QUANT_LOG" | tee -a "$QUANT_LOG"
-    
-    # 提供诊断建议
-    echo "可能原因及解决方案:" | tee -a "$QUANT_LOG"
-    echo "1. 网络问题: 检查集群是否能访问 huggingface.co" | tee -a "$QUANT_LOG"
-    echo "2. 模型ID错误: 确认 '$MODEL_ID' 是有效的 Hugging Face 模型" | tee -a "$QUANT_LOG"
-    echo "3. 显存不足: 尝试减少校准数据量或使用更大 GPU" | tee -a "$QUANT_LOG"
-    echo "4. 缓存问题: 尝试删除缓存目录 $CACHE_DIR 并重试" | tee -a "$QUANT_LOG"
-    
-    exit 1
-fi
+        --cache_dir /hf_cache
 
-# 检查量化结果
-echo -e "\n🔎 验证量化结果..." | tee -a "$QUANT_LOG"
-if [ -f "$OUTPUT_DIR/COMPLETED" ]; then
-    echo "✅ 量化成功完成!" | tee -a "$QUANT_LOG"
-    echo "模型大小: $(du -sh $OUTPUT_DIR | cut -f1)" | tee -a "$QUANT_LOG"
-    echo "输出文件:" | tee -a "$QUANT_LOG"
-    ls -lh "$OUTPUT_DIR" | tee -a "$QUANT_LOG"
-else
-    echo "❌ 量化未完成，缺少COMPLETED标记" | tee -a "$QUANT_LOG"
-    echo "可能原因:" | tee -a "$QUANT_LOG"
-    echo "1. 脚本提前退出" | tee -a "$QUANT_LOG"
-    echo "2. 存储空间不足" | tee -a "$QUANT_LOG"
-    echo "3. 权限问题" | tee -a "$QUANT_LOG"
-    exit 1
-fi
-
-echo "结束时间: $(date)" | tee -a "$QUANT_LOG"
-echo "====================" | tee -a "$QUANT_LOG"
-
-# ===== 最终状态 =====
-echo -e "\n🏁 任务完成! 详细日志:"
-echo "  - 容器构建: $BUILD_LOG"
-echo "  - 健康检查: $CHECK_LOG"
-echo "  - 量化过程: $QUANT_LOG"
-echo "  - 输出模型: $OUTPUT_DIR"
-
-# 添加成功标记
-touch "$OUTPUT_DIR/JOB_$JOB_ID_SUCCESS"
-echo "✅ 量化任务 $JOB_ID 成功完成于 $(date)" > "$OUTPUT_DIR/JOB_$JOB_ID_SUCCESS"
-
-exit 0
+# ===== 完成标记 =====
+echo "✅ 作业完成: $(date)"
+touch "$OUTPUT_DIR/COMPLETED"
