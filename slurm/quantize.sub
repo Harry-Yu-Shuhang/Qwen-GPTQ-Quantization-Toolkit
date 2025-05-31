@@ -21,7 +21,7 @@ OUTPUT_DIR="./quantized_models/qwen-32b-gptq-v2"
 CONFIG="configs/qwen_32b_gptq.yaml"
 
 # 设置 Hugging Face 缓存目录（推荐使用集群持久存储）
-CACHE_DIR="/vol/research/ly0008/hf_cache"
+CACHE_DIR="/vol/research/ly0008/ysh/hf_cache"
 
 # 设置 Hugging Face 访问令牌（仅私有模型需要）
 # export HF_TOKEN="your_huggingface_token"
