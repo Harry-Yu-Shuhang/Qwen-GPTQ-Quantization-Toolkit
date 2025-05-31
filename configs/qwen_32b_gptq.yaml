@@ -3,7 +3,7 @@ quantization:
   bits: 4
   group_size: 128
   v2: true
-  calibration_dataset_min_length: 10
+  # calibration_dataset_min_length: 10
   dynamic:
     ".*attention.*": 
       bits: 4
