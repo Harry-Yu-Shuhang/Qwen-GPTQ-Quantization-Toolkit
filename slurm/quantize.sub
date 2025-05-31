@@ -10,6 +10,15 @@
 #SBATCH --output=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs/quant_%j.log
 #SBATCH --error=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs/quant_%j.err
 
+# ==== 使用持久空间作为构建缓存目录 ====
+export APPTAINER_TMPDIR=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_tmp
+export APPTAINER_CACHEDIR=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/apptainer_cache
+mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
+
+echo "⚠️ Apptainer 构建缓存目录已重定向:"
+echo "  TMPDIR:  $APPTAINER_TMPDIR"
+echo "  CACHEDIR:$APPTAINER_CACHEDIR"
+
 # ===== 用户配置区 =====
 # 设置 Hugging Face 模型 ID（公开或私有模型）
 MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
