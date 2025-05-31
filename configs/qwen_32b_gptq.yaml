@@ -2,22 +2,27 @@ quantization:
   bits: 4
   group_size: 128
   damp_percent: 0.01
-  damp_auto_increment: 0.01     # 建议加上，与 class 定义一致
+  damp_auto_increment: 0.01
   desc_act: false
   static_groups: false
   sym: true
   true_sequential: true
   lm_head: false
-  quant_method: GPTQ            # 如果使用枚举，需要解析
-  format: GPTQ                  # 同上
+  quant_method: QUANT_METHOD.GPTQ
+  format: FORMAT.GPTQ
   mse: 0.0
   parallel_packing: true
-  meta: null
+  meta:
+    quantizer: gptqmodel
+    uri: https://github.com/modelcloud/gptqmodel
+    v2: true
+    v2_alpha: 0.25
+    v2_memory_device: auto
   device: null
-  pack_dtype: int32             # 这里建议你转成 torch.int32，否则会报错
+  pack_dtype: torch.int32
   adapter: null
   rotation: null
   is_marlin_format: false
-  v2: true
+  v2: True
   v2_alpha: 0.25
   v2_memory_device: auto
