@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+trap 'echo "❌ 安装失败: 行号 $LINENO，命令: $BASH_COMMAND" >&2; exit 1' ERR
 
 source /opt/conda/etc/profile.d/conda.sh
 conda create -n qwen-gptq python=3.10 -y

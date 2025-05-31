@@ -19,7 +19,8 @@ From: nvidia/cuda:11.8.0-devel-ubuntu22.04
     export PATH=/opt/conda/bin:$PATH
 
 %post
-    set -eEuo pipefail
+    SHELL=/bin/bash
+    set -euo pipefail
     trap 'echo "❌ 安装失败: 行号 $LINENO，命令: $BASH_COMMAND" >&2; exit 1' ERR
 
     echo "📦 安装基础依赖..."
