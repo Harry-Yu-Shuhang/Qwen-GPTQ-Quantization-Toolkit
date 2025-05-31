@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=4:00:00
 #SBATCH --mem=32G
-#SBATCH --output=/vol/research/ly0008/ysh/logs/quant_%j.log
-#SBATCH --error=/vol/research/ly0008/ysh/logs/quant_%j.err
+#SBATCH --output=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs/quant_%j.log
+#SBATCH --error=/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/logs/quant_%j.err
 
 # ===== 用户配置区 =====
 # 设置 Hugging Face 模型 ID（公开或私有模型）
