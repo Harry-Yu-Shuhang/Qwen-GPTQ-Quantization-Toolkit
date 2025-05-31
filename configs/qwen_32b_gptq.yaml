@@ -6,7 +6,7 @@ quantization:
   desc_act: false
   sym: true
   true_sequential: true
-  tokenizer: Qwen/Qwen2.5-32B-Instruct
+  # tokenizer: Qwen/Qwen2.5-32B-Instruct
   block_name_to_quantize:
     - q_proj
     - k_proj
