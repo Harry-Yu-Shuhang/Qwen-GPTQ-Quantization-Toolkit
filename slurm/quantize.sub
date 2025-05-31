@@ -10,21 +10,31 @@
 #SBATCH --output=logs/quant_%j.log
 #SBATCH --error=logs/quant_%j.err
 
-# 初始化环境
+# ===== 初始化设置 =====
+set -eEuo pipefail
+trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
+
+# 获取作业ID
+JOB_ID=${SLURM_JOB_ID:-$(date +%s)}
+echo "🆔 作业ID: $JOB_ID"
+
+# 创建日志目录
 LOG_DIR="logs"
 mkdir -p "$LOG_DIR"
+echo "📁 日志目录: $LOG_DIR"
+
+# 容器文件路径
 DEF_FILE="build_GPTQModel/apptainer.def"
 SIF_FILE="build_GPTQModel/qwen-gptq.sif"
+echo "🔧 容器定义: $DEF_FILE"
+echo "📦 容器镜像: $SIF_FILE"
 
-# 构建容器（如果需要）
+# ===== 容器构建 =====
+BUILD_LOG="$LOG_DIR/container_build_$JOB_ID.log"
+echo -e "\n🚧 检查容器镜像..."
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
-    echo "Building container..."
-    apptainer build "$SIF_FILE" "$DEF_FILE"
-fi
-
-# 运行量化
-apptainer exec --nv "$SIF_FILE" \
-    python /opt/quantize.py \
-        --model_path /path/to/Qwen2.5-32B-Instruct \
-        --output_dir ./quantized_models/qwen-32b-gptq-v2 \
-        --config configs/qwen_32b_gptq.yaml
+    echo "🛠️ 需要构建容器..."
+    
+    # 清理旧构建缓存
+    echo "🧹 清理临时文件..."
+    find "/
