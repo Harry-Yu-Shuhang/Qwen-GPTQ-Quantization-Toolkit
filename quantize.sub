@@ -19,6 +19,14 @@ cd "$SLURM_SUBMIT_DIR"
 
 DEF_FILE="build_GPTQModel/apptainer.def"
 SIF_FILE="build_GPTQModel/qwen-gptq.sif"
+OUTPUT_DIR="quantized_models/qwen-32b-gptq"
+
+# 使用 /tmp 避免 I/O 错误
+export APPTAINER_TMPDIR=/tmp
+export APPTAINER_CACHEDIR=/tmp
+
+# 创建输出目录
+mkdir -p "$OUTPUT_DIR"
 
 # 构建镜像（如有必要）
 if [ ! -f "$SIF_FILE" ] || [ "$DEF_FILE" -nt "$SIF_FILE" ]; then
@@ -31,10 +39,10 @@ fi
 # 启动量化任务
 echo "🚀 启动 GPTQ 量化..."
 apptainer exec --nv "$SIF_FILE" \
-    python /opt/app/quantize.py \
+    python /opt/project/quantize.py \
         --model_id Qwen/Qwen2.5-32B-Instruct \
-        --output_dir quantized_models/qwen-32b-gptq \
-        --config /opt/app/configs/qwen_32b_gptq.yaml \
+        --output_dir "/opt/project/${OUTPUT_DIR}" \
+        --config /opt/project/configs/qwen_32b_gptq.yaml \
         --cache_dir /tmp/hf_cache
 
 echo "✅ 任务完成: $(date)"
