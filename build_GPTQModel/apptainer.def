@@ -1,153 +1,35 @@
 Bootstrap: docker
-From: nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+From: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 %labels
-    Author Harry-Yu-Shuhang
-    Description Container for Qwen GPTQ Quantization
-    Version 1.0
-    Build-Date 2025-05-31
+    Author ShuhangYu
+    Description Apptainer image for Qwen GPTQ Compression (AutoGPTQ + PyTorch 2.3)
 
 %files
-    # 本地文件复制（使用绝对路径更可靠）
-    /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/build_GPTQModel/install.sh /opt/install.sh
-    /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/scripts/quantize.py /opt/quantize.py
-    /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/configs/qwen_32b_gptq.yaml /opt/config.yaml
-    
-    # Git 子模块（确保路径正确）
-    /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/build_GPTQModel/GPTQModel /opt/GPTQModel
+    install.sh /opt/install.sh
+    ../GPTQModel /opt/GPTQModel
+    ../quantize.py /opt/project/quantize.py
+    ../configs /opt/project/configs
 
 %environment
-    # 基础环境变量
-    export LC_ALL=C.UTF-8
-    export LANG=C.UTF-8
-    export PYTHONUNBUFFERED=1
-    export PYTHONIOENCODING=UTF-8
-    
-    # CUDA 相关
-    export CUDA_HOME=/usr/local/cuda
-    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    export PATH=/usr/local/cuda/bin:$PATH
-    
-    # Python 环境
-    export PATH=/opt/conda/bin:$PATH
-    export CONDA_ENV=qwen-gptq
-    
-    # 缓存设置（避免占用过多空间）
+    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     export TRANSFORMERS_CACHE=/tmp/hf_cache
     export HF_HOME=/tmp/hf_cache
-    export XDG_CACHE_HOME=/tmp/xdg_cache
-    
-    # 量化相关
-    export TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
-    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-    
-    # Python 路径
-    export PYTHONPATH=/opt:/opt/GPTQModel
+    export PYTHONPATH=/opt/project:/opt/GPTQModel
 
 %post
-    # 设置错误处理（任何命令失败都会终止构建）
     set -eEuo pipefail
-    trap 'echo "!!!!! 构建失败: 行号 $LINENO，命令: $BASH_COMMAND" >&2; exit 1' ERR
-    
-    # 1. 系统更新和基础工具
-    echo ">>> 步骤 1/6: 更新系统和安装基础工具..." >&2
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        wget \
-        curl \
-        git \
-        build-essential \
-        cmake \
-        ninja-build \
-        libopenmpi-dev \
-        software-properties-common \
-        2>&1 | tee -a /build.log
-    
-    # 2. 安装 Miniconda
-    echo ">>> 步骤 2/6: 安装 Miniconda..." >&2
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    trap 'echo "❌ 安装失败: 行号 $LINENO，命令: $BASH_COMMAND" >&2; exit 1' ERR
+
+    echo "🔧 初始化 Conda 环境..."
+    apt update && apt install -y wget git bzip2
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
     bash miniconda.sh -b -p /opt/conda
-    rm miniconda.sh
-    export PATH="/opt/conda/bin:$PATH"
-    
-    # 3. 创建 Conda 环境
-    echo ">>> 步骤 3/6: 创建 Conda 环境..." >&2
-    conda create -n $CONDA_ENV python=3.11 -y
-    source /opt/conda/etc/profile.d/conda.sh
-    conda activate $CONDA_ENV
-    
-    # 4. 设置 Python 环境
-    echo ">>> 步骤 4/6: 设置 Python 基础环境..." >&2
-    pip install -U pip setuptools wheel | tee -a /build.log
-    
-    # 5. 运行安装脚本（带详细日志）
-    echo ">>> 步骤 5/6: 运行安装脚本..." >&2
-    chmod +x /opt/install.sh
-    /opt/install.sh 2>&1 | tee -a /build.log
-    
-    # 6. 清理和验证
-    echo ">>> 步骤 6/6: 清理和验证..." >&2
-    conda clean -y --all
-    pip cache purge
-    rm -rf /var/lib/apt/lists/*
-    
-    # 验证关键组件
-    echo "=== 验证安装 ===" | tee -a /build.log
-    python -c "import torch; print(f'PyTorch 版本: {torch.__version__}')" | tee -a /build.log
-    python -c "print(f'CUDA 可用: {torch.cuda.is_available()}')" | tee -a /build.log
-    python -c "from gptqmodel import GPTQModel; print('GPTQModel 导入成功')" | tee -a /build.log
-    
-    # 创建版本标记
-    echo "1.0" > /VERSION
-    date +%Y-%m-%d > /BUILD_DATE
+    export PATH=/opt/conda/bin:$PATH
+    conda init bash
+
+    echo "📦 安装依赖包..."
+    bash /opt/install.sh
 
 %runscript
-    # 设置容器运行时环境
-    source /opt/conda/etc/profile.d/conda.sh
-    conda activate qwen-gptq
-    
-    # 显示帮助信息
-    if [ $# -eq 0 ]; then
-        echo "Qwen GPTQ 量化容器"
-        echo "版本: $(cat /VERSION) ($(cat /BUILD_DATE))"
-        echo ""
-        echo "可用命令:"
-        echo "  quantize - 运行量化脚本"
-        echo "  bash     - 进入交互式 shell"
-        echo ""
-        echo "示例: apptainer exec --nv qwen-gptq.sif quantize"
-        exit 0
-    fi
-    
-    # 命令路由
-    case "$1" in
-        quantize)
-            shift
-            echo ">>> 启动量化任务: $(date)" >&2
-            python /opt/quantize.py "$@"
-            ;;
-        bash)
-            shift
-            exec /bin/bash "$@"
-            ;;
-        *)
-            exec "$@"
-            ;;
-    esac
-
-%help
-    Qwen GPTQ 量化容器
-    ==================
-    
-    此容器提供 Qwen 系列模型的 GPTQ 量化环境
-    
-    使用方法:
-      apptainer exec --nv qwen-gptq.sif quantize \
-        --model_path /path/to/model \
-        --output_dir /output/path
-    
-    交互模式:
-      apptainer shell --nv qwen-gptq.sif
-    
-    验证安装:
-      apptainer exec qwen-gptq.sif python -c "from gptqmodel import GPTQModel; print('OK')"
+    exec python /opt/project/quantize.py "$@"
