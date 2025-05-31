@@ -7,21 +7,24 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --time=4:00:00
 #SBATCH --mem=32G
-#SBATCH --output=logs/quant_%j.log
-#SBATCH --error=logs/quant_%j.err
+#SBATCH --output=/vol/research/ly0008/ysh/logs/quant_%j.log
+#SBATCH --error=/vol/research/ly0008/ysh/logs/quant_%j.err
 
 # ===== 用户配置区 =====
 # 设置 Hugging Face 模型 ID（公开或私有模型）
 MODEL_ID="Qwen/Qwen2.5-32B-Instruct"
 
-# 设置输出目录
-OUTPUT_DIR="./quantized_models/qwen-32b-gptq-v2"
+# 设置输出目录（使用您有权限的路径）
+OUTPUT_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/quantized_models/qwen-32b-gptq-v2"
 
-# 设置配置文件路径
-CONFIG="configs/qwen_32b_gptq.yaml"
+# 设置配置文件路径（使用绝对路径）
+CONFIG="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/configs/qwen_32b_gptq.yaml"
 
-# 设置 Hugging Face 缓存目录（推荐使用集群持久存储）
-CACHE_DIR="/vol/research/ly0008/ysh/hf_cache"
+# 设置 Hugging Face 缓存目录（使用您有权限的路径）
+CACHE_DIR="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/original_models"
+
+# 设置项目根目录（使用绝对路径）
+PROJECT_ROOT="/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit"
 
 # 设置 Hugging Face 访问令牌（仅私有模型需要）
 # export HF_TOKEN="your_huggingface_token"
@@ -34,20 +37,20 @@ trap 'echo "❌ 任务失败: 行号 $LINENO，退出码 $?" >&2; exit 1' ERR
 JOB_ID=${SLURM_JOB_ID:-$(date +%s)}
 echo "🆔 作业ID: $JOB_ID"
 
-# 创建日志目录
-LOG_DIR="logs"
+# 创建日志目录（使用您有权限的路径）
+LOG_DIR="/vol/research/ly0008/ysh/logs"
 mkdir -p "$LOG_DIR"
 echo "📁 日志目录: $LOG_DIR"
 
-# 容器文件路径
-DEF_FILE="build_GPTQModel/apptainer.def"
-SIF_FILE="build_GPTQModel/qwen-gptq.sif"
+# 容器文件路径（使用绝对路径）
+DEF_FILE="$PROJECT_ROOT/build_GPTQModel/apptainer.def"
+SIF_FILE="$PROJECT_ROOT/build_GPTQModel/qwen-gptq.sif"
 echo "🔧 容器定义: $DEF_FILE"
 echo "📦 容器镜像: $SIF_FILE"
 
 # 创建缓存目录
 mkdir -p "$CACHE_DIR"
-echo "📦 缓存目录: $CACHE_DIR (大小: $(du -sh $CACHE_DIR | cut -f1))"
+echo "📦 缓存目录: $CACHE_DIR (大小: $(du -sh $CACHE_DIR 2>/dev/null | cut -f1 || echo '新目录'))"
 
 # ===== 容器构建 =====
 BUILD_LOG="$LOG_DIR/container_build_$JOB_ID.log"
@@ -137,6 +140,7 @@ echo "⏬ 开始下载和量化模型..." | tee -a "$QUANT_LOG"
 if ! apptainer exec --nv \
     $ENV_VARS \
     --bind "$CACHE_DIR:/hf_cache" \
+    --bind "$PROJECT_ROOT:/opt/project" \
     "$SIF_FILE" \
     python /opt/quantize.py \
         --model_id "$MODEL_ID" \
