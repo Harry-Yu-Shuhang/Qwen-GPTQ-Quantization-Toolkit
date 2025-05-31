@@ -41,7 +41,7 @@ echo "🚀 启动 GPTQ 量化..."
 apptainer run --nv "$SIF_FILE" \
     --model_id Qwen/Qwen2.5-32B-Instruct \
     --output_dir " /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/${OUTPUT_DIR}" \
-    --config /opt/configs/qwen_32b_gptq.yaml \
+    --config /opt/app/configs/qwen_32b_gptq.yaml \
     --cache_dir /tmp/hf_cache
 
 echo "✅ 任务完成: $(date)"
