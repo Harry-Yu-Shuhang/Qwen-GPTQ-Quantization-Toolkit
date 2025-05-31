@@ -6,10 +6,10 @@ From: nvidia/cuda:11.8.0-devel-ubuntu22.04
     Description Apptainer for Qwen GPTQ Compression using GPTQModel
 
 %files
-    install.sh /opt/install.sh
-    ../GPTQModel /opt/GPTQModel
-    ../quantize.py /opt/app/quantize.py
-    ../configs /opt/app/configs
+    build_GPTQModel /opt/build_GPTQModel
+    GPTQModel /opt/GPTQModel
+    quantize.py /opt/app/quantize.py
+    configs /opt/app/configs
 
 %environment
     export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -30,7 +30,7 @@ From: nvidia/cuda:11.8.0-devel-ubuntu22.04
     bash miniconda.sh -b -p /opt/conda && rm miniconda.sh
 
     echo "📦 安装 Python 包..."
-    bash /opt/install.sh
+    bash /opt/build_GPTQModel/install.sh
 
 %runscript
     exec python /opt/app/quantize.py "$@"
