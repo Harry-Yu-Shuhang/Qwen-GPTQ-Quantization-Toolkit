@@ -19,10 +19,3 @@ quantization:
     v2_alpha: 0.25
     v2_memory_device: auto
   device: null
-  pack_dtype: torch.int32
-  adapter: null
-  rotation: null
-  is_marlin_format: false
-  v2: True
-  v2_alpha: 0.25
-  v2_memory_device: auto
