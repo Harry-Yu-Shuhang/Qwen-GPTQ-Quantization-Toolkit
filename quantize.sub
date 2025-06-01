@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --partition=debug
+#SBATCH --partition=a100
 #SBATCH --job-name=qwen_gptq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=4:00:00
-#SBATCH --mem=32G
+#SBATCH --time=1-00:00:00
+#SBATCH --mem=128G
 #SBATCH --output=logs/output_qwen_gptq.log
 #SBATCH --error=logs/error_qwen_gptq.log
 
@@ -40,7 +40,7 @@ fi
 echo "🚀 启动 GPTQ 量化..."
 apptainer run --nv "$SIF_FILE" \
     --model_id Qwen/Qwen2.5-32B-Instruct \
-    --output_dir " /mnt/fast/nobackup/scratch4weeks/ly0008/ysh/${OUTPUT_DIR}" \
+    --output_dir "/mnt/fast/nobackup/scratch4weeks/ly0008/ysh/Qwen-GPTQ-Quantization-Toolkit/${OUTPUT_DIR}" \
     --config /opt/app/configs/qwen_32b_gptq.yaml \
     --cache_dir /tmp/hf_cache
 
