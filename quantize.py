@@ -5,7 +5,6 @@ import time
 from gptqmodel import GPTQModel, QuantizeConfig
 from datasets import load_dataset
 import torch
-from torch.utils.data import DataLoader
 
 def load_config(config_path):
     with open(config_path, 'r') as f:
@@ -38,29 +37,26 @@ def main():
         cache_dir=args.cache_dir
     )
 
-    # ✅ 加载校准数据集
-    dataset_cfg = config.get("calibration_dataset")
-    if not dataset_cfg:
-        raise ValueError("❌ 缺少 calibration_dataset 字段，无法进行量化！")
+    # ✅ 加载校准数据集（可选）
+    dataset_cfg = config.get("calibration_dataset", {})
+    if dataset_cfg:
+        print(f"📊 加载校准数据集: {dataset_cfg.get('name', 'wikitext')}")
+        dataset = load_dataset(
+            dataset_cfg.get('name', 'wikitext'),
+            dataset_cfg.get('config', 'wikitext-2-v1'),
+            split=dataset_cfg.get('split', 'train'),
+            cache_dir=args.cache_dir
+        )
+        text_column = dataset_cfg.get('text_column', 'text')
+        samples = dataset_cfg.get('samples', 1024)
+        calibration_dataset = dataset[text_column][:samples]  # ✅ 不用 DataLoader
+    else:
+        raise ValueError("❌ 缺少校准数据集 calibration_dataset，无法进行量化！")
 
-    print(f"📊 加载校准数据集: {dataset_cfg.get('name', 'wikitext')}")
-    dataset = load_dataset(
-        dataset_cfg.get('name', 'wikitext'),
-        dataset_cfg.get('config', 'wikitext-2-v1'),
-        split=dataset_cfg.get('split', 'train'),
-        cache_dir=args.cache_dir
-    )
-
-    text_column = dataset_cfg.get('text_column', 'text')
-    samples = dataset_cfg.get('samples', 1024)
-    texts = dataset[text_column][:samples]
-    batch_size = config.get('batch_size', 4)
-    dataloader = DataLoader(texts, batch_size=batch_size)
-
-    # ✅ 执行量化
+    # ✅ 量化
     print("🔧 开始量化...")
     model.quantize(
-        calibration_dataset=dataloader,
+        calibration_dataset=calibration_dataset,
         auto_gc=config.get('auto_gc', False),
         buffered_fwd=config.get('buffered_fwd', True)
     )
