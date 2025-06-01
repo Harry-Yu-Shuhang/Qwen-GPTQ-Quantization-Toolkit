@@ -1,21 +1,2 @@
 quantization:
-  bits: 4
-  group_size: 128
   damp_percent: 0.01
-  damp_auto_increment: 0.01
-  desc_act: false
-  static_groups: false
-  sym: true
-  true_sequential: true
-  lm_head: false
-  quant_method: QUANT_METHOD.GPTQ
-  format: FORMAT.GPTQ
-  mse: 0.0
-  parallel_packing: true
-  meta:
-    quantizer: gptqmodel
-    uri: https://github.com/modelcloud/gptqmodel
-    v2: true
-    v2_alpha: 0.25
-    v2_memory_device: auto
-  device: null
