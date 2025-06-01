@@ -1,2 +1,21 @@
 quantization:
-  damp_percent: 0.01
+  bits: 4
+  group_size: 128
+  v2: true
+  dynamic:
+    ".*attention.*": 
+      bits: 4
+    ".*mlp.*": 
+      bits: 4
+    "-:.*lm_head.*": {}
+
+calibration_dataset:
+  name: "wikitext"
+  config: "wikitext-2-v1"
+  split: "train"
+  text_column: "text"
+  samples: 1024
+
+batch_size: 4
+auto_gc: false
+buffered_fwd: true
