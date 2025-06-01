@@ -60,10 +60,14 @@ def main():
 
     # ✅ 量化
     print("🔧 开始量化...")
-    model.quantize(
-        auto_gc=config.get('auto_gc', False),
-        buffered_fwd=config.get('buffered_fwd', True)
-    )
+    if dataset_cfg:
+        model.quantize(
+            calibration_dataset=dataloader,
+            auto_gc=config.get('auto_gc', False),
+            buffered_fwd=config.get('buffered_fwd', True)
+        )
+    else:
+        raise ValueError("❌ 缺少校准数据集 calibration_dataset，无法进行量化！")
 
     # ✅ 保存模型
     print(f"💾 保存量化模型到: {args.output_dir}")
