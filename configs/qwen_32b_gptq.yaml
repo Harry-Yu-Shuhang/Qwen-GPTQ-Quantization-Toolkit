@@ -17,5 +17,5 @@ calibration_dataset:
   samples: 1024
 
 batch_size: 4
-auto_gc: false
-buffered_fwd: true
+auto_gc: true
+buffered_fwd: false
