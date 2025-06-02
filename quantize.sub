@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=32                  # 每任务 32 CPU，用于加速处理
 #SBATCH --gpus-per-node=1                   # 每节点1块GPU
 #SBATCH --mem=512G                          # 内存为512GB（避免OOM）
-#SBATCH --time=1-00:00:00                   # 最长运行1天
+#SBATCH --time=3-00:00:00                   # 最长运行1天
 #SBATCH --exclusive                         # 独占整个节点
 #SBATCH --output=logs/output_%j.log         # 标准输出
 #SBATCH --error=logs/error_%j.log           # 错误输出
