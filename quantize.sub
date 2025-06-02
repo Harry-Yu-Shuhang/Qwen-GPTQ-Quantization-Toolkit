@@ -1,3 +1,4 @@
+#!/bin/bash
 #SBATCH --job-name=qwen_gptq                # 作业名
 #SBATCH --partition=a100                    # 使用 a100 分区
 #SBATCH --nodes=1                           # 单节点（适用于GPTQ单卡）
