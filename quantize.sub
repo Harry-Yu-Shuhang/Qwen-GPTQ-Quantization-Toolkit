@@ -1,14 +1,15 @@
-#!/bin/bash
-#SBATCH --partition=a100
-#SBATCH --job-name=qwen_gptq
-#SBATCH --nodes=2
-#SBATCH --ntasks=1
-#SBATCH --gpus-per-node=1                 
-#SBATCH --cpus-per-task=64                
-#SBATCH --time=2-00:00:00                  
-#SBATCH --mem=1024G                  
-#SBATCH --output=logs/output_qwen_gptq.log
-#SBATCH --error=logs/error_qwen_gptq.log
+#SBATCH --job-name=qwen_gptq                # 作业名
+#SBATCH --partition=a100                    # 使用 a100 分区
+#SBATCH --nodes=1                           # 单节点（适用于GPTQ单卡）
+#SBATCH --ntasks=1                          # 单任务
+#SBATCH --ntasks-per-node=1                 # 每个节点1任务
+#SBATCH --cpus-per-task=32                  # 每任务 32 CPU，用于加速处理
+#SBATCH --gpus-per-node=1                   # 每节点1块GPU
+#SBATCH --mem=512G                          # 内存为512GB（避免OOM）
+#SBATCH --time=1-00:00:00                   # 最长运行1天
+#SBATCH --exclusive                         # 独占整个节点
+#SBATCH --output=logs/output_%j.log         # 标准输出
+#SBATCH --error=logs/error_%j.log           # 错误输出
 
 
 set -eEuo pipefail
