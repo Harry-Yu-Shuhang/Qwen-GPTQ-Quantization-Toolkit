@@ -3,12 +3,13 @@
 #SBATCH --job-name=qwen_gptq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=16
-#SBATCH --time=1-00:00:00
-#SBATCH --mem=256G
+#SBATCH --gpus-per-node=1                 
+#SBATCH --cpus-per-task=64                
+#SBATCH --time=2-00:00:00                  
+#SBATCH --mem=1024G                  
 #SBATCH --output=logs/output_qwen_gptq.log
 #SBATCH --error=logs/error_qwen_gptq.log
+
 
 set -eEuo pipefail
 trap 'echo "❌ 任务失败: 行号 $LINENO, 退出码 $?"' ERR
