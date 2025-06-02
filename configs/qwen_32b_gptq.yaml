@@ -14,8 +14,7 @@ calibration_dataset:
   config: "wikitext-2-v1"
   split: "train"
   text_column: "text"
-  samples: 1024
-
-batch_size: 4
+  samples: 64  
+batch_size: 1   
 auto_gc: true
 buffered_fwd: false

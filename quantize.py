@@ -33,7 +33,7 @@ def main():
     model = GPTQModel.load(
         args.model_id,
         quant_config,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,
         cache_dir=args.cache_dir
     )
 
