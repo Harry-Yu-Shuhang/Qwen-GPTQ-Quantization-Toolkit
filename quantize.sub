@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=qwen_gptq                # 作业名
 #SBATCH --partition=a100                    # 使用 a100 分区
-#SBATCH --nodelist=aisurrey15               # 节点名称
+#SBATCH --nodelist=aisurrey25               # 节点名称
 #SBATCH --nodes=1                           # 单节点（适用于GPTQ单卡）
 #SBATCH --ntasks=1                          # 单任务
 #SBATCH --ntasks-per-node=1                 # 每个节点1任务
